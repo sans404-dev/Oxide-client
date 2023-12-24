@@ -175,11 +175,22 @@ fn main() {
     info!("{}", client.decode("auth", code).1);
     println!("{:?}", aes_func::packethash(b"hey"));
     loop {
-        let code = client.mkchat("test", "test");
-        info!("{}", client.decode("mkchat", code).1);
-        let mut msg = String::new();
+        let mut cmdraw = String::new();
         print!("{}", prompt);
         io::stdout().flush().unwrap();
-        io::stdin().read_line(&mut msg).unwrap();
+        io::stdin().read_line(&mut cmdraw).unwrap();
+        let cmd: Vec<&str> = cmdraw.trim().split_whitespace().collect();
+        if !cmd.is_empty() {
+            let cmd_name = cmd[0];
+            let cmd_args = &cmd[1..];
+            match cmd_name {
+                "help" => {
+                    info!("{:?}", cmd_args);
+                }
+                _ => {
+                    info!("Unknown command: {:?}", cmd_name);
+                }
+            }
+        }
     }
 }
