@@ -1,0 +1,18 @@
+[package]
+name = "client"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+aes = "0.8.3"
+env_logger = "0.10.0"
+flate2 = "1.0.28"
+generic-array = "1.0.0"
+hex = "0.4.3"
+log = "0.4"
+memmem = "0.1.1"
+rand = "0.8.5"
+rsa = "0.9.3"
+sha2 = "0.10.8"
