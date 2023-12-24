@@ -173,19 +173,19 @@ fn main() {
     let mut client = User::new(ip, username, password, "data".to_string());
     let code = client.auth();
     info!("{}", client.decode("auth", code).1);
-    println!("{:?}", aes_func::packethash(b"hey"));
     loop {
         let mut cmdraw = String::new();
         print!("{}", prompt);
         io::stdout().flush().unwrap();
         io::stdin().read_line(&mut cmdraw).unwrap();
         let cmd: Vec<&str> = cmdraw.trim().split_whitespace().collect();
-        if !cmd.is_empty() {
+        if !cmd.is_empty() && cmd.len() > 2 {
             let cmd_name = cmd[0];
             let cmd_args = &cmd[1..];
             match cmd_name {
-                "help" => {
-                    info!("{:?}", cmd_args);
+                "mkchat" => {
+                    let code = client.mkchat(cmd_args[0], cmd_args[1]);
+                    info!("{:?}", client.decode("mkchat", code).1);
                 }
                 _ => {
                     info!("Unknown command: {:?}", cmd_name);
