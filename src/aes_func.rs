@@ -58,8 +58,13 @@ pub fn packethash(packet: &[u8]) -> u64 {
     sum/pkg_len
 }
 
-pub fn gen_chathash(key: &[u8]) -> Vec<u8> {
-    vec![0]
+pub fn gen_chathash(key: &[u8]) -> GenericArray<u8, U32> {
+    let mut hasher = Sha256::new();
+    hasher.update(key);
+    hasher.update(sectors::int_to_bytes(packethash(key)));
+    hasher.update(b"salt");
+    let result = hasher.finalize();
+    result
 }
 
 pub fn get_aes_session_password(key: &[u8]) -> GenericArray<u8, U32> {
@@ -68,16 +73,12 @@ pub fn get_aes_session_password(key: &[u8]) -> GenericArray<u8, U32> {
     hasher.update(sectors::int_to_bytes(packethash(key)));
     hasher.update(b"salt");
     let result = hasher.finalize();
-    dbg!("{}", &result.encode_hex::<String>());
     result
 }
 
-pub fn get_session(data: Vec<u8>, password: &String) -> (RsaPublicKey, RsaPrivateKey) {
+pub fn get_session(data: Vec<u8>, key: &Aes256) -> (RsaPublicKey, RsaPrivateKey) {
     let mut decompressor = ZlibDecoder::new(Vec::new());
-    let aes_key = Aes256::new(GenericArray::from_slice(&get_aes_session_password(
-        password.trim().as_bytes(),
-    )));
-    let decrypted_keys = decrypt(&aes_key, data);
+    let decrypted_keys = decrypt(key, data);
     decompressor
         .write_all(&decrypted_keys)
         .expect("\n\t\t\t\t!!!WRONG PASSWORD!!!\n\n\n");

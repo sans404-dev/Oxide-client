@@ -40,6 +40,7 @@ struct User {
     sector_num: i128,
     keys: (RsaPublicKey, RsaPrivateKey),
     session_key: Option<Aes256>,
+    chats: sectors::SectorsType
 }
 
 impl User {
@@ -62,7 +63,10 @@ impl User {
         let mut enc_keypair = Vec::new();
         let mut usrfile = File::open(usr).unwrap();
         usrfile.read_to_end(&mut enc_keypair).unwrap();
-        let keys = aes_func::get_session(enc_keypair, &password);
+
+        let key = Aes256::new(GenericArray::from_slice(&aes_func::get_aes_session_password(password.trim().as_bytes())));
+        let keys = aes_func::get_session(enc_keypair, &key);
+        let mut chats = sectors::SectorsType::new(Some(format!("{datadir}/chats.txt")), Some(key));
         let session = session_level::connect(ip.trim().to_string(), 4444);
         Self {
             session,
@@ -72,6 +76,7 @@ impl User {
             sector_num,
             keys,
             session_key: None,
+            chats
         }
     }
 
@@ -122,7 +127,21 @@ impl User {
 
     pub fn mkchat(&mut self, chatname: &str, password: &str) -> Vec<u8> {
         self.sendarr(vec![vec![b"0"], vec![chatname.as_bytes()], vec![&aes_func::gen_chathash(password.as_bytes())]]);
-        self.recv()
+        let code = self.recv();
+        if code == vec![0] {
+            self.join_chat(chatname, password);
+        }
+        code
+    }
+
+    pub fn join_chat(&mut self, chatname: &str, password: &str) -> Vec<u8> {
+        self.sendarr(vec![vec![b"1"], vec![chatname.as_bytes()], vec![&aes_func::gen_chathash(password.as_bytes())]]);
+        let code = self.recv();
+        if code == vec![0] {
+            self.chats.add(vec![vec![chatname.as_bytes()], vec![&aes_func::gen_chathash(password.as_bytes())]]);
+            self.chats.save().unwrap();
+        }
+        code
     }
 
     fn checkcode(&self, code: &Vec<u8>) -> bool {
@@ -131,27 +150,22 @@ impl User {
 
     pub fn decode(&self, func: &str, code: Vec<u8>) -> (&str, &str) {
         let code_table = hashmap! {
-            "auth" => hashmap!{
+            "auth" => hashmap! {
                 vec![0] => ("0", "Authenticated"),
                 vec![1] => ("1", "This username is taken. Try to change it")
             },
-            "mkchat" => hashmap!{
+            "mkchat" => hashmap! {
                 vec![0] => ("0", "Chat created"),
                 vec![1] => ("1", "This chatname is taken. Try to change it")
+            },
+            "join_chat" => hashmap! {
+                vec![0] => ("0", "Joined the chat"),
+                vec![1] => ("1", "Chat not found"),
+                vec![2] => ("2", "Bad chat hash"),
+                vec![3] => ("3", "You are already in chat")
             }
         };
         return *code_table.get(func).and_then(|c| c.get(&code)).unwrap();
-    }
-
-    fn user_thread(&mut self) {
-        info!("{:?}", &self.session.connection);
-        loop {
-            let data = self.recv();
-            dbg!("{:?}", &data);
-            let data = &sectors::read_sectors(data);
-            dbg!(&data);
-            self.session.shutdown();
-        }
     }
 }
 
@@ -172,7 +186,11 @@ fn main() {
     let prompt = format!("{}@{} ~> ", username.trim(), ip.trim());
     let mut client = User::new(ip, username, password, "data".to_string());
     let code = client.auth();
-    info!("{}", client.decode("auth", code).1);
+    if code != vec![0] {
+        error!("{}", client.decode("auth", code).1);
+    } else {
+        info!("{}", client.decode("auth", code).1);
+    }
     loop {
         let mut cmdraw = String::new();
         print!("{}", prompt);
@@ -185,8 +203,22 @@ fn main() {
             match cmd_name {
                 "mkchat" => {
                     let code = client.mkchat(cmd_args[0], cmd_args[1]);
-                    info!("{:?}", client.decode("mkchat", code).1);
+                    if code != vec![0] {
+                        error!("{:?}", client.decode("mkchat", code).1);
+                    } else {
+                        info!("{:?}", client.decode("mkchat", code).1);
+                    }
                 }
+
+                "join" => {
+                    let code = client.join_chat(cmd_args[0], cmd_args[1]);
+                    if code != vec![0] {
+                        error!("{:?}", client.decode("join_chat", code).1);
+                    } else {
+                        info!("{:?}", client.decode("join_chat", code).1);
+                    }
+                }
+
                 _ => {
                     info!("Unknown command: {:?}", cmd_name);
                 }
