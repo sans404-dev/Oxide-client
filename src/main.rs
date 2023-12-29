@@ -63,10 +63,10 @@ impl User {
         let mut enc_keypair = Vec::new();
         let mut usrfile = File::open(usr).unwrap();
         usrfile.read_to_end(&mut enc_keypair).unwrap();
-
-        let key = Aes256::new(GenericArray::from_slice(&aes_func::get_aes_session_password(password.trim().as_bytes())));
+        let key: Aes256 = Aes256::new(GenericArray::from_slice(&aes_func::get_aes_session_password(password.trim().as_bytes())));
         let keys = aes_func::get_session(enc_keypair, &key);
         let mut chats = sectors::SectorsType::new(Some(format!("{datadir}/chats.txt")), Some(key));
+        chats.load().unwrap();
         let session = session_level::connect(ip.trim().to_string(), 4444);
         Self {
             session,
@@ -121,7 +121,6 @@ impl User {
         self.session_key = Some(Aes256::new(GenericArray::<u8, U32>::from_slice(
             &session_key,
         )));
-        dbg!("{:?}", &self.session_key);
         self.recv()
     }
 
@@ -141,7 +140,17 @@ impl User {
             self.chats.add(vec![vec![chatname.as_bytes()], vec![&aes_func::gen_chathash(password.as_bytes())]]);
             self.chats.save().unwrap();
         }
+        else if code == vec![3] {
+            if self.chats.findbin(0, chatname.as_bytes()) == -1 {
+                self.chats.add(vec![vec![chatname.as_bytes()], vec![&aes_func::gen_chathash(password.as_bytes())]]);
+                self.chats.save().unwrap();
+            }
+        }
         code
+    }
+
+    pub fn getchats(&mut self, field_num: usize) -> Vec<Vec<u8>> {
+        self.chats.fields(field_num)
     }
 
     fn checkcode(&self, code: &Vec<u8>) -> bool {
@@ -197,30 +206,48 @@ fn main() {
         io::stdout().flush().unwrap();
         io::stdin().read_line(&mut cmdraw).unwrap();
         let cmd: Vec<&str> = cmdraw.trim().split_whitespace().collect();
-        if !cmd.is_empty() && cmd.len() > 2 {
+        if !cmd.is_empty() && cmd.len() > 0 {
             let cmd_name = cmd[0];
             let cmd_args = &cmd[1..];
             match cmd_name {
+                "help" => {
+                    info!("stub");
+                }
+
+                "chats" => {
+                    info!("Ok. Here are your chats.");
+                    for (index, chatname) in client.getchats(0).iter().enumerate() {
+                        info!("[{}] - {}", index, sectors::bytes_to_utf8(chatname.to_vec()));
+                    }
+                }
                 "mkchat" => {
-                    let code = client.mkchat(cmd_args[0], cmd_args[1]);
-                    if code != vec![0] {
-                        error!("{:?}", client.decode("mkchat", code).1);
+                    if cmd.len() < 3 {
+                        warn!("Not enough args");
                     } else {
-                        info!("{:?}", client.decode("mkchat", code).1);
+                        let code = client.mkchat(cmd_args[0], cmd_args[1]);
+                        if code != vec![0] {
+                            error!("{:?}", client.decode("mkchat", code).1);
+                        } else {
+                            info!("{:?}", client.decode("mkchat", code).1);
+                        }
                     }
                 }
 
                 "join" => {
-                    let code = client.join_chat(cmd_args[0], cmd_args[1]);
-                    if code != vec![0] {
-                        error!("{:?}", client.decode("join_chat", code).1);
+                    if cmd.len() < 3 {
+                        warn!("Not enough args");
                     } else {
-                        info!("{:?}", client.decode("join_chat", code).1);
+                        let code = client.join_chat(cmd_args[0], cmd_args[1]);
+                        if code != vec![0] {
+                            error!("{:?}", client.decode("join_chat", code).1);
+                        } else {
+                            info!("{:?}", client.decode("join_chat", code).1);
+                        }
                     }
                 }
 
                 _ => {
-                    info!("Unknown command: {:?}", cmd_name);
+                    warn!("Unknown command: {:?}", cmd_name);
                 }
             }
         }

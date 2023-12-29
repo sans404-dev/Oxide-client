@@ -167,6 +167,23 @@ impl SectorsType {
         -1
     }
 
+    pub fn findbin(&mut self, field_num: usize, query: &[u8]) -> i32 {
+        let data = &self.data;
+        let search = TwoWaySearcher::new(&query);
+
+        for (en, sector) in reader(data.to_vec()) {
+            if search.search_in(&sector).is_some() {
+                let fields = read_sectors_b(sector.into());
+                if fields.len() >= field_num + 1 {
+                    if fields[field_num] == query {
+                        return en as i32;
+                    }
+                }
+            }
+        }
+        -1
+    }
+
     pub fn getdat(&mut self, sector_num: u32, field_num: usize) -> Vec<u8> {
         let data = &self.data;
         for (en, sector) in reader(data.to_vec()) {
@@ -215,5 +232,15 @@ impl SectorsType {
         let mut new_data = self.getdat(sector_num, field_num);
         new_data.extend(data);
         self.edit(sector_num, field_num, new_data);
+    }
+
+    pub fn fields(&mut self, field_num: usize) -> Vec<Vec<u8>> {
+        let selfdata = &self.data;
+        let mut fields_vec: Vec<Vec<u8>> = Vec::new();
+        for (index, sector) in reader(selfdata.to_vec()) {
+            let chatname = &read_sectors_b(sector)[field_num];
+            fields_vec.push(chatname.to_vec());
+        }
+        fields_vec
     }
 }
