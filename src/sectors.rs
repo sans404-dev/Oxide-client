@@ -126,7 +126,7 @@ impl SectorsType {
 
     pub fn load(&mut self) -> std::io::Result<()> {
         if let Some(ref filename) = self.filename {
-            if let Err(metadata) = fs::metadata(filename) {
+            if let Err(_metadata) = fs::metadata(filename) {
                 self.save().unwrap();
             }
         }
@@ -237,7 +237,7 @@ impl SectorsType {
     pub fn fields(&mut self, field_num: usize) -> Vec<Vec<u8>> {
         let selfdata = &self.data;
         let mut fields_vec: Vec<Vec<u8>> = Vec::new();
-        for (index, sector) in reader(selfdata.to_vec()) {
+        for (_index, sector) in reader(selfdata.to_vec()) {
             let chatname = &read_sectors_b(sector)[field_num];
             fields_vec.push(chatname.to_vec());
         }

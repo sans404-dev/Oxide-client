@@ -11,7 +11,6 @@ use flate2::Compression;
 use std::io::Write;
 
 use generic_array::typenum::U32;
-use hex::ToHex;
 use sha2::{Digest, Sha256};
 
 use crate::sectors;

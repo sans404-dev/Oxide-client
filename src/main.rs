@@ -200,6 +200,7 @@ fn main() {
     } else {
         info!("{}", client.decode("auth", code).1);
     }
+    info!("hint: type ```help``` for help message");
     loop {
         let mut cmdraw = String::new();
         print!("{}", prompt);
@@ -211,7 +212,7 @@ fn main() {
             let cmd_args = &cmd[1..];
             match cmd_name {
                 "help" => {
-                    info!("stub");
+                    info!("\nhelp -> displays a help message\nchats -> displays all chats you are in\nmkchat {{chatname password}} -> creates a private chat\njoin {{chatname password}} -> join chat using password");
                 }
 
                 "chats" => {

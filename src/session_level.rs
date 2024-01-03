@@ -4,16 +4,12 @@ use std::net::{SocketAddr, TcpStream};
 
 pub struct Session {
     pub connection: Option<TcpStream>,
-    ip: String,
-    port: u16,
 }
 
 impl Session {
-    fn new(connection: Option<TcpStream>, ip: String, port: u16) -> Self {
+    fn new(connection: Option<TcpStream>) -> Self {
         Session {
             connection,
-            ip,
-            port,
         }
     }
 
@@ -60,5 +56,5 @@ impl Session {
 pub fn connect(ip: String, port: u16) -> Session {
     let remote_addr: SocketAddr = format!("{}:{}", ip, port).parse().unwrap();
     let stream = TcpStream::connect(remote_addr).unwrap();
-    Session::new(Some(stream), ip, port)
+    Session::new(Some(stream))
 }
