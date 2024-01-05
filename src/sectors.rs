@@ -243,4 +243,10 @@ impl SectorsType {
         }
         fields_vec
     }
+
+    pub fn obj_sec_get(&mut self, sector_num: u32, field_num: usize) -> SectorsType {
+        let mut obj = SectorsType::new(None, None);
+        obj.data = self.getdat(sector_num, field_num);
+        obj
+    }
 }

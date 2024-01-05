@@ -11,7 +11,7 @@ use flate2::Compression;
 use std::io::Write;
 
 use generic_array::typenum::U32;
-use sha2::{Digest, Sha256};
+use rsa::sha2::{Digest, Sha256};
 
 use crate::sectors;
 
