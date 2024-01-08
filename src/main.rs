@@ -134,11 +134,11 @@ impl User {
             &aes_func::get_aes_session_password(password.trim().as_bytes()),
         ));
         let keys = aes_func::get_session(enc_keypair, &key);
-        let mut chats = sectors::SectorsType::new(Some(format!("{datadir}/chats.txt")), None);
+        let mut chats = sectors::SectorsType::new(Some(format!("{datadir}/chats.txt")), Some(key.clone()));
         let mut keybase =
-            sectors::SectorsType::new(Some(format!("{datadir}/keybase.txt")), None);
+            sectors::SectorsType::new(Some(format!("{datadir}/keybase.txt")), Some(key.clone()));
         let mut messages =
-            sectors::SectorsType::new(Some(format!("{datadir}/messages.txt")), None);
+            sectors::SectorsType::new(Some(format!("{datadir}/messages.txt")), Some(key));
         chats.load().unwrap();
         keybase.load().unwrap();
         messages.load().unwrap();
@@ -427,7 +427,7 @@ fn main() {
             let cmd_args = &cmd[1..];
             match cmd_name {
                 "help" => {
-                    info!("\nhelp -> displays a help message\nchats -> displays all chats you are in\nmkchat {{chatname password}} -> creates a private chat\njoin {{chatname password}} -> join chat using password");
+                    info!("\nhelp -> displays a help message\nchats -> displays all chats you are in\nmkchat {{chatname password}} -> creates a private chat\njoin {{chatname password}} -> join chat using password\nselect {{index}} -> enter the chat\nexit -> exit program");
                 }
 
                 "chats" => {
