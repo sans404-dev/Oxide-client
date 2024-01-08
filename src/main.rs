@@ -277,7 +277,6 @@ impl User {
     fn buflen(&mut self) -> usize {
         self.sendarr(vec![vec![b"4"]]);
         let bufl = self.recv();
-        dbg!("{:?}", &bufl);
         sectors::bytes_to_int(&bufl) as usize
     }
 
@@ -345,16 +344,16 @@ impl User {
         fwrite.write_all(&sectors::int_to_bytes(buflen as u64)).unwrap();
     }
 
-    fn get_messages(&mut self, chatname: &[u8]) -> Vec<Vec<Vec<u8>>> {
+    fn get_messages(&mut self, chatname: &[u8]) -> Vec<(Vec<u8>, Vec<u8>)> {
         let messages_secnum = self.messages.findbin(0, chatname);
         if messages_secnum == -1 {
-            return vec![vec!["Server:".as_bytes().to_vec()], vec!["Empty chat. You can't read it history".as_bytes().to_vec()]];
+            return vec![(Vec::from("Server".as_bytes()), Vec::from("Empty chat. You can't read it history".as_bytes()))];
         }
         let mut messages = Vec::new();
         let old_msgs = self.messages.obj_sec_get(messages_secnum as u32, 1);
         for data in sectors::read_sectors_b(old_msgs.data) {
             let msg = sectors::read_sectors_b(data);
-            messages.push(vec![msg[1].clone(), msg[2].clone()]);
+            messages.push((msg[1].clone(), msg[2].clone()));
         }
         messages
     }
@@ -405,7 +404,7 @@ fn main() {
     io::stdin().read_line(&mut password).unwrap();
     let prompt = format!("{}@{} ~> ", username.trim(), ip.trim());
     let mut client = User::new(
-        ip,
+        ip.clone(),
         username.trim().to_string(),
         password,
         "data".to_string(),
@@ -472,11 +471,33 @@ fn main() {
                         warn!("Not enough args");
                     } else {
                         let chatname = &client.getchats(0)[cmd_args[0].parse::<usize>().unwrap()];
+                        let prompt = format!("{}@{} [{}] ~> ", username.trim(), ip.trim(), &sectors::bytes_to_utf8(chatname.to_vec()));
                         loop {
                             client.read_buffer();
+                            let messages = client.get_messages(chatname);
+                            print!("\x1B[2J\x1B[1;1H");
+                            for (author, message) in &messages {
+                                println!("{}: {}", sectors::bytes_to_utf8(author.to_vec()), sectors::bytes_to_utf8(message.to_vec()));
+                            }
+                            let mut cmd = String::new();
+                            print!("{}", prompt);
+                            io::stdout().flush().unwrap();
+                            io::stdin().read_line(&mut cmd).unwrap();
+                            let msg = cmd.trim();
+                            if msg.len() > 0 {
+                                if msg == "exit" {
+                                    break;
+                                } else {
+                                    client.send_message(std::str::from_utf8(chatname).unwrap().to_string(), msg.as_bytes().to_vec());
+                                }
+                            }
                         }
                     }
                 }
+
+               "exit" => {
+                   break;
+               }
 
                 _ => {
                     warn!("Unknown command: {:?}", cmd_name);
