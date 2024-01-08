@@ -257,7 +257,6 @@ impl User {
         let username = &self.username;
         let priv_key = &self.keys.1;
         let secnum = self.chats.findbin(0, chatname.as_bytes());
-        dbg!("{}", &secnum);
         if secnum != -1 {
             let secpass = self.chats.getdat(secnum as u32, 1);
             let key = Aes256::new(GenericArray::from_slice(&secpass));
@@ -298,7 +297,6 @@ impl User {
         let datadir = &self.datadir;
         let username = &self.username;
         let buffile = format!("{}/buf.txt", &datadir);
-        dbg!("{}", &buffile);
         if !fs::metadata(&buffile).is_ok() {
             let mut fbuf = File::create(&buffile).unwrap();
             fbuf.write_all(&sectors::int_to_bytes(0 as u64)).unwrap();
@@ -308,7 +306,6 @@ impl User {
         fbuf.read_to_string(&mut bi).unwrap();
         drop(fbuf);
         let biint = sectors::bytes_to_int(bi.as_bytes()) as usize;
-        dbg!("{}", &biint);
         let buflen = self.buflen();
         if buflen > biint {
             for index in 0..(buflen-biint) {
