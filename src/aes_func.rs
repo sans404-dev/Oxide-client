@@ -54,7 +54,7 @@ pub fn decrypt(_aes: &Aes256, data: Vec<u8>) -> Vec<u8> {
 pub fn packethash(packet: &[u8]) -> u64 {
     let sum: u64 = packet.iter().map(|byte| *byte as u64).sum();
     let pkg_len: u64 = packet.len() as u64;
-    sum/pkg_len
+    sum / pkg_len
 }
 
 pub fn gen_chathash(key: &[u8]) -> GenericArray<u8, U32> {

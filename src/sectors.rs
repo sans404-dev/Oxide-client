@@ -28,6 +28,9 @@ pub fn int_to_bytes(int_: u64) -> Vec<u8> {
 }
 
 pub fn bytes_to_int(bytes: &[u8]) -> u64 {
+    if bytes.iter().all(|&byte| byte == 0) {
+        return 0;
+    }
     u64::from_le_bytes(bytes.try_into().unwrap())
 }
 
@@ -248,5 +251,9 @@ impl SectorsType {
         let mut obj = SectorsType::new(None, None);
         obj.data = self.getdat(sector_num, field_num);
         obj
+    }
+
+    pub fn obj_sec_set(&mut self, sector_num: u32, field_num: usize, secobj: SectorsType) {
+        self.edit(sector_num, field_num, secobj.data);
     }
 }

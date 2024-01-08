@@ -8,9 +8,7 @@ pub struct Session {
 
 impl Session {
     fn new(connection: Option<TcpStream>) -> Self {
-        Session {
-            connection,
-        }
+        Session { connection }
     }
 
     pub fn recv(&mut self) -> Vec<u8> {

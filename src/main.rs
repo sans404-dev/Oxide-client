@@ -16,11 +16,11 @@ use aes::cipher::{generic_array::GenericArray, KeyInit};
 use aes::Aes256;
 use generic_array::typenum::U32;
 use rand::RngCore;
-use rsa::pkcs8::{EncodePublicKey, LineEnding};
-use rsa::pkcs1v15::{SigningKey, VerifyingKey};
-use rsa::{Pkcs1v15Encrypt, RsaPrivateKey, RsaPublicKey};
-use rsa::signature::{SignatureEncoding, RandomizedSigner};
+use rsa::pkcs1v15::{SigningKey, VerifyingKey, Signature};
+use rsa::pkcs8::{EncodePublicKey, DecodePublicKey, LineEnding};
 use rsa::sha2::Sha256;
+use rsa::signature::{RandomizedSigner, SignatureEncoding, Verifier};
+use rsa::{Pkcs1v15Encrypt, RsaPrivateKey, RsaPublicKey};
 
 #[macro_export]
 macro_rules! hashmap {
@@ -36,8 +36,29 @@ macro_rules! hashmap {
     };
 }
 
+struct Load {
+    full: u32,
+    string: String,
+    num: u32,
+}
+
+impl Load {
+    fn new(full: u32, string: String) -> Load {
+        Load {
+            full,
+            string,
+            num: 0,
+        }
+    }
+
+    fn write(&mut self) {
+        print!("\r[+] {}/{}{}", self.num, self.full, self.string);
+        io::stdout().flush().unwrap();
+    }
+}
+
 struct Message {
-    data: Vec<Vec<u8>>
+    data: Vec<Vec<u8>>,
 }
 
 impl Message {
@@ -50,14 +71,29 @@ impl Message {
         let signing_data = [id.to_vec(), usr.to_vec(), data.to_vec()].concat();
         let signature = signing_key.sign_with_rng(&mut rng, &signing_data);
         let signed_data = vec![id.to_vec(), usr, data, signature.to_vec()];
-        Self {
-            data: signed_data
-        }
+        Self { data: signed_data }
     }
 
     fn compile(self) -> Vec<u8> {
-        let pr_data = self.data.iter().map(|vec| vec![vec.as_slice()]).collect::<Vec<_>>();
+        let pr_data = self
+            .data
+            .iter()
+            .map(|vec| vec![vec.as_slice()])
+            .collect::<Vec<_>>();
         sectors::write_sectors(pr_data)
+    }
+
+    fn check(self, key: RsaPublicKey) -> Vec<Vec<u8>> {
+        let verifykey = VerifyingKey::<Sha256>::new(key);
+        let message = &self.data[2];
+        let message_dis = sectors::read_sectors_b(message.to_vec());
+        let msg_id = &message_dis[0];
+        let sender_usr = &message_dis[1];
+        let msg_data = &message_dis[2];
+        let signature = &message_dis[3];
+        let data = vec![msg_id.to_vec(), sender_usr.to_vec(), msg_data.to_vec()];
+        verifykey.verify(&data.concat(), &Signature::try_from(signature.as_slice()).unwrap()).unwrap();
+        data
     }
 }
 
@@ -70,7 +106,8 @@ struct User {
     keys: (RsaPublicKey, RsaPrivateKey),
     session_key: Option<Aes256>,
     chats: sectors::SectorsType,
-    keybase: sectors::SectorsType
+    keybase: sectors::SectorsType,
+    messages: sectors::SectorsType
 }
 
 impl User {
@@ -93,12 +130,18 @@ impl User {
         let mut enc_keypair = Vec::new();
         let mut usrfile = File::open(usr).unwrap();
         usrfile.read_to_end(&mut enc_keypair).unwrap();
-        let key: Aes256 = Aes256::new(GenericArray::from_slice(&aes_func::get_aes_session_password(password.trim().as_bytes())));
+        let key: Aes256 = Aes256::new(GenericArray::from_slice(
+            &aes_func::get_aes_session_password(password.trim().as_bytes()),
+        ));
         let keys = aes_func::get_session(enc_keypair, &key);
         let mut chats = sectors::SectorsType::new(Some(format!("{datadir}/chats.txt")), None);
-        let mut keybase = sectors::SectorsType::new(Some(format!("{datadir}/keybase.txt")), Some(key));
+        let mut keybase =
+            sectors::SectorsType::new(Some(format!("{datadir}/keybase.txt")), None);
+        let mut messages =
+            sectors::SectorsType::new(Some(format!("{datadir}/messages.txt")), None);
         chats.load().unwrap();
         keybase.load().unwrap();
+        messages.load().unwrap();
         let session = session_level::connect(ip.trim().to_string(), 4444);
         Self {
             session,
@@ -109,7 +152,8 @@ impl User {
             keys,
             session_key: None,
             chats,
-            keybase
+            keybase,
+            messages
         }
     }
 
@@ -126,10 +170,8 @@ impl User {
 
     fn send(&mut self, mut data: Vec<u8>) {
         if let Some(session_key) = &self.session_key {
-            println!("{:?}", &data);
             data = aes_func::encrypt(session_key, &data);
         }
-        println!("{:?}", &data);
         self.session.send(&data);
     }
 
@@ -141,10 +183,7 @@ impl User {
     fn auth(&mut self) -> Vec<u8> {
         let public_key_pem = self.keys.0.to_public_key_pem(LineEnding::LF).unwrap();
         let username = self.username.to_owned();
-        let data = vec![
-            vec![public_key_pem.as_bytes()],
-            vec![username.as_bytes()],
-        ];
+        let data = vec![vec![public_key_pem.as_bytes()], vec![username.as_bytes()]];
         self.sendarr(data);
         let encrypted_session_key = self.recv();
         let session_key = self
@@ -159,7 +198,11 @@ impl User {
     }
 
     fn mkchat(&mut self, chatname: &str, password: &str) -> Vec<u8> {
-        self.sendarr(vec![vec![b"0"], vec![chatname.as_bytes()], vec![&aes_func::gen_chathash(password.as_bytes())]]);
+        self.sendarr(vec![
+            vec![b"0"],
+            vec![chatname.as_bytes()],
+            vec![&aes_func::gen_chathash(password.as_bytes())],
+        ]);
         let code = self.recv();
         if code == vec![0] {
             self.join_chat(chatname, password);
@@ -168,15 +211,24 @@ impl User {
     }
 
     fn join_chat(&mut self, chatname: &str, password: &str) -> Vec<u8> {
-        self.sendarr(vec![vec![b"1"], vec![chatname.as_bytes()], vec![&aes_func::gen_chathash(password.as_bytes())]]);
+        self.sendarr(vec![
+            vec![b"1"],
+            vec![chatname.as_bytes()],
+            vec![&aes_func::gen_chathash(password.as_bytes())],
+        ]);
         let code = self.recv();
         if code == vec![0] {
-            self.chats.add(vec![vec![chatname.as_bytes()], vec![&aes_func::gen_chathash(password.as_bytes())]]);
+            self.chats.add(vec![
+                vec![chatname.as_bytes()],
+                vec![&aes_func::gen_chathash(password.as_bytes())],
+            ]);
             self.chats.save().unwrap();
-        }
-        else if code == vec![3] {
+        } else if code == vec![3] {
             if self.chats.findbin(0, chatname.as_bytes()) == -1 {
-                self.chats.add(vec![vec![chatname.as_bytes()], vec![&aes_func::gen_chathash(password.as_bytes())]]);
+                self.chats.add(vec![
+                    vec![chatname.as_bytes()],
+                    vec![&aes_func::gen_chathash(password.as_bytes())],
+                ]);
                 self.chats.save().unwrap();
             }
         }
@@ -197,7 +249,7 @@ impl User {
                 vec![1]
             }
         } else {
-           self.keybase.getdat(secnum as u32, 0)
+            self.keybase.getdat(secnum as u32, 0)
         }
     }
 
@@ -210,12 +262,101 @@ impl User {
             let secpass = self.chats.getdat(secnum as u32, 1);
             let key = Aes256::new(GenericArray::from_slice(&secpass));
             let message = Message::new(message, username.to_string(), priv_key.clone()).compile();
-            self.sendarr(vec![vec![b"3"], vec![chatname.as_bytes()], vec![&aes_func::encrypt(&key, &message)]]);
+            self.sendarr(vec![
+                vec![b"3"],
+                vec![chatname.as_bytes()],
+                vec![&aes_func::encrypt(&key, &message)],
+            ]);
+            let code = self.recv();
+            if code != vec![0] {
+                error!("{}", self.decode("message", code).1);
+            }
         }
+    }
+
+    fn buflen(&mut self) -> usize {
+        self.sendarr(vec![vec![b"4"]]);
+        let bufl = self.recv();
+        dbg!("{:?}", &bufl);
+        sectors::bytes_to_int(&bufl) as usize
+    }
+
+    fn getbuf(&mut self, index: u64) -> Vec<u8> {
+        self.sendarr(vec![vec![b"5"], vec![&sectors::int_to_bytes(index)]]);
+        let data = self.recv();
+        if data == vec![1] {
+            error!("Invalid package index");
+            return vec![1];
+        }
+        data
     }
 
     fn getchats(&mut self, field_num: usize) -> Vec<Vec<u8>> {
         self.chats.fields(field_num)
+    }
+
+    fn read_buffer(&mut self) {
+        let datadir = &self.datadir;
+        let username = &self.username;
+        let buffile = format!("{}/buf.txt", &datadir);
+        dbg!("{}", &buffile);
+        if !fs::metadata(&buffile).is_ok() {
+            let mut fbuf = File::create(&buffile).unwrap();
+            fbuf.write_all(&sectors::int_to_bytes(0 as u64)).unwrap();
+        }
+        let mut bi = String::new();
+        let mut fbuf = File::open(&buffile).unwrap();
+        fbuf.read_to_string(&mut bi).unwrap();
+        drop(fbuf);
+        let biint = sectors::bytes_to_int(bi.as_bytes()) as usize;
+        dbg!("{}", &biint);
+        let buflen = self.buflen();
+        if buflen > biint {
+            for index in 0..(buflen-biint) {
+                let pkg = sectors::read_sectors_b(self.getbuf((biint+index) as u64));
+                if pkg[0] == b"0" {
+                    let chatname = &pkg[1];
+                    let message = &pkg[2];
+                    let secnum = self.chats.findbin(0, chatname);
+                    let messages_secnum = self.messages.findbin(0,chatname);
+                    let secpass = self.chats.getdat(secnum as u32, 1);
+                    let key = Aes256::new(GenericArray::from_slice(&secpass));
+                    let dec_msg = aes_func::decrypt(&key, message.to_vec());
+                    let username_msg = &sectors::read_sectors_b(dec_msg.clone())[1];
+                    let author_vec = self.getpkey(sectors::bytes_to_utf8(username_msg.to_vec()));
+                    let author_key = RsaPublicKey::from_public_key_pem(std::str::from_utf8(author_vec.as_slice()).unwrap()).unwrap();
+                    let priv_key = &self.keys.1;
+                    let verified_msg = Message::new(dec_msg, self.username.to_string(), priv_key.clone()).check(author_key);
+                    let compiled_msg = verified_msg.iter().map(|vec| vec![vec.as_slice()]).collect::<Vec<_>>();
+                    if messages_secnum == -1 {
+                        self.messages.add(vec![vec![chatname], vec![&sectors::write_sector(&sectors::write_sectors(compiled_msg))]]);
+                    } else {
+                        let mut old_msgs = self.messages.obj_sec_get(messages_secnum as u32, 1);
+                        if old_msgs.findbin(2, &verified_msg[0]) == -1 {
+                            old_msgs.add(compiled_msg);
+                            self.messages.obj_sec_set(messages_secnum as u32, 1, old_msgs);
+                        }
+                    }
+                    self.messages.save().unwrap();
+                }
+            }
+        }
+        let mut fwrite = File::create(&buffile).unwrap();
+        fwrite.write_all(&sectors::int_to_bytes(buflen as u64)).unwrap();
+    }
+
+    fn get_messages(&mut self, chatname: &[u8]) -> Vec<Vec<Vec<u8>>> {
+        let messages_secnum = self.messages.findbin(0, chatname);
+        if messages_secnum == -1 {
+            return vec![vec!["Server:".as_bytes().to_vec()], vec!["Empty chat. You can't read it history".as_bytes().to_vec()]];
+        }
+        let mut messages = Vec::new();
+        let old_msgs = self.messages.obj_sec_get(messages_secnum as u32, 1);
+        for data in sectors::read_sectors_b(old_msgs.data) {
+            let msg = sectors::read_sectors_b(data);
+            messages.push(vec![msg[1].clone(), msg[2].clone()]);
+        }
+        messages
     }
 
     fn checkcode(&self, code: &Vec<u8>) -> bool {
@@ -237,6 +378,11 @@ impl User {
                 vec![1] => ("1", "Chat not found"),
                 vec![2] => ("2", "Bad chat hash"),
                 vec![3] => ("3", "You are already in chat")
+            },
+            "message" => hashmap! {
+                vec![0] => ("0", "Message sent"),
+                vec![1] => ("1", "You are not a member of this chat"),
+                vec![2] => ("2", "Chat does not exist")
             }
         };
         return *code_table.get(func).and_then(|c| c.get(&code)).unwrap();
@@ -258,7 +404,12 @@ fn main() {
     io::stdout().flush().unwrap();
     io::stdin().read_line(&mut password).unwrap();
     let prompt = format!("{}@{} ~> ", username.trim(), ip.trim());
-    let mut client = User::new(ip, username.trim().to_string(), password, "data".to_string());
+    let mut client = User::new(
+        ip,
+        username.trim().to_string(),
+        password,
+        "data".to_string(),
+    );
     let code = client.auth();
     if code != vec![0] {
         error!("{}", client.decode("auth", code).1);
@@ -283,7 +434,11 @@ fn main() {
                 "chats" => {
                     info!("Ok. Here are your chats.");
                     for (index, chatname) in client.getchats(0).iter().enumerate() {
-                        info!("[{}] - {}", index, sectors::bytes_to_utf8(chatname.to_vec()));
+                        info!(
+                            "[{}] - {}",
+                            index,
+                            sectors::bytes_to_utf8(chatname.to_vec())
+                        );
                     }
                 }
                 "mkchat" => {
@@ -312,8 +467,18 @@ fn main() {
                     }
                 }
 
+                "select" => {
+                    if cmd.len() < 2 {
+                        warn!("Not enough args");
+                    } else {
+                        let chatname = &client.getchats(0)[cmd_args[0].parse::<usize>().unwrap()];
+                        loop {
+                            client.read_buffer();
+                        }
+                    }
+                }
+
                 _ => {
-                    client.send_message(cmd_args[0].into(), cmd_args[1].into());
                     warn!("Unknown command: {:?}", cmd_name);
                 }
             }
