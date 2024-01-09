@@ -295,17 +295,16 @@ impl User {
 
     fn read_buffer(&mut self) {
         let datadir = &self.datadir;
-        let username = &self.username;
         let buffile = format!("{}/buf.txt", &datadir);
         if !fs::metadata(&buffile).is_ok() {
             let mut fbuf = File::create(&buffile).unwrap();
             fbuf.write_all(&sectors::int_to_bytes(0 as u64)).unwrap();
         }
-        let mut bi = String::new();
+        let mut bi = Vec::new();
         let mut fbuf = File::open(&buffile).unwrap();
-        fbuf.read_to_string(&mut bi).unwrap();
+        fbuf.read_to_end(&mut bi).unwrap();
         drop(fbuf);
-        let biint = sectors::bytes_to_int(bi.as_bytes()) as usize;
+        let biint = sectors::bytes_to_int(&bi) as usize;
         let buflen = self.buflen();
         if buflen > biint {
             for index in 0..(buflen-biint) {

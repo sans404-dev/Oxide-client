@@ -53,9 +53,9 @@ pub fn write_sectors(data: Vec<Vec<&[u8]>>) -> Vec<u8> {
     all_data
 }
 
-pub fn reader(data: Vec<u8>) -> impl Iterator<Item = (i8, Vec<u8>)> {
+pub fn reader(data: Vec<u8>) -> impl Iterator<Item = (i64, Vec<u8>)> {
     let mut index = 0;
-    let mut iter: i8 = -1;
+    let mut iter: i64 = -1;
 
     std::iter::from_fn(move || {
         if index < data.len() {
