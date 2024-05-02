@@ -296,7 +296,7 @@ impl User {
     fn read_buffer(&mut self) {
         let datadir = &self.datadir;
         let buffile = format!("{}/buf.txt", &datadir);
-        if !fs::metadata(&buffile).is_ok() {
+        if fs::metadata(&buffile).is_err() {
             let mut fbuf = File::create(&buffile).unwrap();
             fbuf.write_all(&sectors::int_to_bytes(0 as u64)).unwrap();
         }

@@ -177,10 +177,8 @@ impl SectorsType {
         for (en, sector) in reader(data.to_vec()) {
             if search.search_in(&sector).is_some() {
                 let fields = read_sectors_b(sector.into());
-                if fields.len() >= field_num + 1 {
-                    if fields[field_num] == query {
-                        return en as i32;
-                    }
+                if fields.len() >= field_num + 1 && fields[field_num] == query {
+                    return en as i32;
                 }
             }
         }
@@ -199,13 +197,6 @@ impl SectorsType {
             }
         }
         Vec::new()
-    }
-
-    pub fn rem(&mut self, sector_num: usize) {
-        let data = &self.data;
-        let mut sectors = read_sectors(data.to_vec());
-        sectors.remove(sector_num);
-        self.data = write_sectors(vec![sectors.iter().map(|sct| sct.as_bytes()).collect()]);
     }
 
     pub fn edit(&mut self, sector_num: u32, field_num: usize, data: Vec<u8>) {
@@ -229,12 +220,6 @@ impl SectorsType {
             .map(|vec| vec![vec.as_slice()])
             .collect::<Vec<_>>();
         self.data = write_sectors(serdat);
-    }
-
-    pub fn add_to_field(&mut self, sector_num: u32, field_num: usize, data: Vec<u8>) {
-        let mut new_data = self.getdat(sector_num, field_num);
-        new_data.extend(data);
-        self.edit(sector_num, field_num, new_data);
     }
 
     pub fn fields(&mut self, field_num: usize) -> Vec<Vec<u8>> {

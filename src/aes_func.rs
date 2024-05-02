@@ -94,7 +94,7 @@ pub fn gen_session(password: &String) -> Vec<u8> {
         password.trim().as_bytes(),
     )));
     let mut rng = rand::thread_rng();
-    let priv_key = RsaPrivateKey::new(&mut rng, 1024).unwrap();
+    let priv_key = RsaPrivateKey::new(&mut rng, 4096).unwrap();
     let pub_key = RsaPublicKey::from(&priv_key);
     let pub_pem = pub_key.to_public_key_pem(LineEnding::LF).unwrap();
     let priv_pem = priv_key.to_pkcs8_pem(LineEnding::LF).unwrap();
