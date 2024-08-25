@@ -113,6 +113,7 @@ struct User {
 impl User {
     fn new(ip: String, username: String, password: String, dir: String) -> Self {
         let sector_num = -1;
+        let ip_port: Vec<_> = ip.split(":").collect();
         if !fs::metadata(&dir).is_ok() {
             fs::create_dir(&dir).expect("Failed to create directory");
         }
@@ -142,7 +143,7 @@ impl User {
         chats.load().unwrap();
         keybase.load().unwrap();
         messages.load().unwrap();
-        let session = session_level::connect(ip.trim().to_string(), 4444);
+        let session = session_level::connect(ip_port[0].to_string(), ip_port[1].trim().parse().unwrap());
         Self {
             session,
             username,
@@ -389,7 +390,7 @@ fn main() {
     let mut ip = String::new();
     let mut username = String::new();
     let mut password = String::new();
-    print!("Enter server ip: ");
+    print!("Enter server ip:port: ");
     io::stdout().flush().unwrap();
     io::stdin().read_line(&mut ip).unwrap();
     print!("Enter your username: ");
