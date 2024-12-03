@@ -21,6 +21,7 @@ use rsa::pkcs8::{EncodePublicKey, DecodePublicKey, LineEnding};
 use rsa::sha2::Sha256;
 use rsa::signature::{RandomizedSigner, SignatureEncoding, Verifier};
 use rsa::{Pkcs1v15Encrypt, RsaPrivateKey, RsaPublicKey};
+const version: &str = "1.0beta";
 
 #[macro_export]
 macro_rules! hashmap {
@@ -123,7 +124,7 @@ impl User {
         }
         let usr = format!("{}/{}", &datadir, username);
         if !fs::metadata(&usr).is_ok() {
-            info!("[!] Generating a session...");
+            info!("[!] Generating a RSA keypair...");
             let mut file = File::create(&usr).expect("Failed to create file");
             let data = aes_func::gen_session(&password);
             file.write_all(&data).expect("Failed to write to file");
@@ -390,6 +391,7 @@ fn main() {
     let mut ip = String::new();
     let mut username = String::new();
     let mut password = String::new();
+    info!("[+] Loading OxideClient v{}", version);
     print!("Enter server ip:port: ");
     io::stdout().flush().unwrap();
     io::stdin().read_line(&mut ip).unwrap();

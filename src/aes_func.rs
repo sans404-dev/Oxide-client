@@ -9,7 +9,10 @@ use flate2::write::ZlibDecoder;
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
 use std::io::Write;
-
+use ring::pbkdf2::PBKDF2_HMAC_SHA256;
+use std::num::NonZeroU32;
+use ring::digest::SHA256_OUTPUT_LEN;
+use ring::pbkdf2;
 use generic_array::typenum::U32;
 use rsa::sha2::{Digest, Sha256};
 
@@ -58,21 +61,15 @@ pub fn packethash(packet: &[u8]) -> u64 {
 }
 
 pub fn gen_chathash(key: &[u8]) -> GenericArray<u8, U32> {
-    let mut hasher = Sha256::new();
-    hasher.update(key);
-    hasher.update(sectors::int_to_bytes(packethash(key)));
-    hasher.update(b"salt");
-    let result = hasher.finalize();
-    result
+    let mut pass = [0u8; SHA256_OUTPUT_LEN];
+    pbkdf2::derive(PBKDF2_HMAC_SHA256, NonZeroU32::new(600_000).unwrap(), b"salt", key, &mut pass);
+    pass.into()
 }
 
 pub fn get_aes_session_password(key: &[u8]) -> GenericArray<u8, U32> {
-    let mut hasher = Sha256::new();
-    hasher.update(key);
-    hasher.update(sectors::int_to_bytes(packethash(key)));
-    hasher.update(b"salt");
-    let result = hasher.finalize();
-    result
+    let mut pass = [0u8; SHA256_OUTPUT_LEN];
+    pbkdf2::derive(PBKDF2_HMAC_SHA256, NonZeroU32::new(600_000).unwrap(), b"salt", key, &mut pass);
+    pass.into()
 }
 
 pub fn get_session(data: Vec<u8>, key: &Aes256) -> (RsaPublicKey, RsaPrivateKey) {
@@ -98,8 +95,6 @@ pub fn gen_session(password: &String) -> Vec<u8> {
     let pub_key = RsaPublicKey::from(&priv_key);
     let pub_pem = pub_key.to_public_key_pem(LineEnding::LF).unwrap();
     let priv_pem = priv_key.to_pkcs8_pem(LineEnding::LF).unwrap();
-    dbg!("{:?}", &pub_pem);
-    dbg!("{:?}", &priv_pem);
     let merged_keys =
         sectors::write_sectors(vec![vec![pub_pem.as_bytes()], vec![priv_pem.as_bytes()]]);
     compressor.write_all(&merged_keys).unwrap();

@@ -14,4 +14,5 @@ hex = "0.4.3"
 log = "0.4"
 memmem = "0.1.1"
 rand = "0.8.5"
+ring = "0.17.8"
 rsa = { version = "0.9.3", features = ["sha2"] }
